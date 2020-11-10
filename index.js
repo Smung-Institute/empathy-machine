@@ -33,14 +33,15 @@ function isMobile() {
   return isAndroid || isiOS;
 }
 
-let model, videoWidth, videoHeight, video, canvas, scene, camera, renderer, verts, geom;
+let model, videoWidth, videoHeight, video, canvas, scene, camera, renderer, faces, myUVCoords;
 let N_KEYPOINTS = 468;
+const N_FACES = 3;
 
 const VIDEO_SIZE = 500;
 const mobile = isMobile();
 const state = {
-  backend: 'wasm',
-  maxFaces: 1,
+  backend: 'webgl',
+  maxFaces: N_FACES,
   triangulateMesh: true
 };
 
@@ -65,35 +66,54 @@ async function setupCamera() {
   });
 }
 
-function initGeom() {
-  geom = new THREE.Geometry();
+function updateUVs() {
+  faces.forEach(face => {
+    var geom = face.geometry
+    for (let i = 0; i < TRIANGULATION.length / 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        var vert_1 = TRIANGULATION[3 * i + j]
+        geom.faceVertexUvs[0][i][j].x = myUVCoords[vert_1][0];
+        geom.faceVertexUvs[0][i][j].y = 1 - myUVCoords[vert_1][1];
+      }
+    }
 
-  // add the geometry's vertices
-  for (let i = 0; i < N_KEYPOINTS; i++) {
-    var new_point = new THREE.Vector3(0, 0, 0);
-    verts.push(new_point)
-    geom.vertices.push(new_point);
+    geom.uvsNeedUpdate = true;
+  })
+
+}
+
+function initFaceMeshes() {
+  faces = []
+  for (var i = 0; i < N_FACES; i++) {
+    var geom = new THREE.Geometry();
+
+    // add the geometry's vertices
+    for (let i = 0; i < N_KEYPOINTS; i++) {
+      var new_point = new THREE.Vector3(0, 0, 0);
+      geom.vertices.push(new_point);
+    }
+
+    // add the geometry's faces
+    geom.faceVertexUvs[0] = [];
+    for (let i = 0; i < TRIANGULATION.length / 3; i++) {
+      var vert_1 = TRIANGULATION[i * 3]
+      var vert_2 = TRIANGULATION[i * 3 + 1]
+      var vert_3 = TRIANGULATION[i * 3 + 2]
+      geom.faces.push(new THREE.Face3(vert_1, vert_2, vert_3)
+      )
+      geom.faceVertexUvs[0].push([
+        new THREE.Vector2(myUVCoords[vert_1][0], 1 - myUVCoords[vert_1][1]),
+        new THREE.Vector2(myUVCoords[vert_2][0], 1 - myUVCoords[vert_2][1]),
+        new THREE.Vector2(myUVCoords[vert_3][0], 1 - myUVCoords[vert_3][1])
+      ])
+    }
+
+    geom.uvsNeedUpdate = true;
+
+    var face = new THREE.Mesh(geom, getMaterial());
+    scene.add(face);
+    faces.push(face)
   }
-
-  // add the geometry's faces
-  geom.faceVertexUvs[0] = [];
-  for (let i = 0; i < TRIANGULATION.length / 3; i++) {
-    var vert_1 = TRIANGULATION[i * 3]
-    var vert_2 = TRIANGULATION[i * 3 + 1]
-    var vert_3 = TRIANGULATION[i * 3 + 2]
-    geom.faces.push(new THREE.Face3(vert_1, vert_2, vert_3)
-    )
-    geom.faceVertexUvs[0].push([
-      new THREE.Vector2(UV_COORDS[vert_1][0], 1 - UV_COORDS[vert_1][1]),
-      new THREE.Vector2(UV_COORDS[vert_2][0], 1 - UV_COORDS[vert_2][1]),
-      new THREE.Vector2(UV_COORDS[vert_3][0], 1 - UV_COORDS[vert_3][1])
-    ])
-  }
-
-  geom.uvsNeedUpdate = true;
-
-  var object = new THREE.Mesh(geom, getMaterial());
-  scene.add(object);
 }
 
 function getMaterial() {
@@ -105,19 +125,57 @@ function getMaterial() {
   return new THREE.MeshBasicMaterial({ map: texture_dolph });
 }
 
+async function takePic() {
+  const myCanvas = document.createElement("canvas");
+  // scale the canvas accordingly
+  myCanvas.width = video.videoWidth;
+  myCanvas.height = video.videoHeight;
+  // draw the video at that frame
+  myCanvas.getContext('2d')
+    .drawImage(video, 0, 0, myCanvas.width, myCanvas.height);
+  // convert it to a usable data URL
+  var myDataURL = myCanvas.toDataURL();
+  faces.forEach(face => {
+    face.material.map = THREE.ImageUtils.loadTexture(myDataURL);
+    face.material.needsUpdate = true;
+  })
+
+  const predictions = await model.estimateFaces(video);
+  if (predictions.length > 0) {
+    var prediction = predictions[0]
+    const keypoints = prediction.scaledMesh;
+
+    console.log(UV_COORDS)
+
+    for (let i = 0; i < keypoints.length; i++) {
+      const x = keypoints[i][0];
+      const y = keypoints[i][1];
+      const z = keypoints[i][2];
+      console.log(x, y, z)
+      console.log(videoWidth, videoHeight)
+      myUVCoords[i] = [x / videoWidth, y / videoHeight]
+    }
+
+    updateUVs()
+
+  }
+}
+
 
 async function renderPrediction() {
   const predictions = await model.estimateFaces(video);
 
+
   if (predictions.length > 0) {
-    predictions.forEach(prediction => {
+    predictions.forEach((prediction, i) => {
+      var geom = faces[i].geometry
       const keypoints = prediction.scaledMesh;
 
       for (let i = 0; i < keypoints.length; i++) {
         const x = keypoints[i][0];
         const y = keypoints[i][1];
         const z = keypoints[i][2];
-        var vert = verts[i]
+        var vert = geom.vertices[i]
         vert.x = x - videoWidth / 2;
         vert.y = -y + videoHeight / 2;
         vert.z = 1;
@@ -136,6 +194,10 @@ async function renderPrediction() {
 async function main() {
   await tf.setBackend(state.backend);
 
+  var capture_button = document.getElementById("take_pic")
+  capture_button.onclick = takePic
+
+  myUVCoords = UV_COORDS.map(arr => { return arr.slice() })
 
   await setupCamera();
   video.play();
@@ -154,6 +216,7 @@ async function main() {
 
   renderer = new THREE.WebGLRenderer({ canvas: canvas });
 
+
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(65, videoWidth / videoHeight, 0.1, 1000);
 
@@ -167,7 +230,7 @@ async function main() {
   scene.add(camera)
   camera.position.z = 500;
 
-  initGeom()
+  initFaceMeshes()
   model = await facemesh.load({ maxFaces: state.maxFaces });
   renderPrediction();
 
