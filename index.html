@@ -37,6 +37,16 @@ limitations under the License.
       top: 50%;
       position: absolute;
     }
+
+    * {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      overflow: hidden;
+      /* Hide scrollbars */
+    }
   </style>
 </head>
 
@@ -53,8 +63,7 @@ limitations under the License.
             height: auto;
             ">
         </video>
-        <button id="take_pic">Take Pic</button>
-        <img src="dolph.jpg" id="dolph" hidden></img>
+        <img src="dolph.jpg" id="dolph" style="display:none;"></img>
       </div>
     </div>
   </div>

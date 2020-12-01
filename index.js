@@ -33,7 +33,7 @@ function isMobile() {
   return isAndroid || isiOS;
 }
 
-let model, videoWidth, videoHeight, video, canvas, scene, camera, renderer, faces, myUVCoords;
+let model, videoWidth, videoHeight, video, scene, camera, renderer, faces, myUVCoords, renderer_canvas, output_canvas, video_valid, stream;
 let N_KEYPOINTS = 468;
 const N_FACES = 3;
 
@@ -46,21 +46,35 @@ const state = {
 };
 
 
-async function setupCamera() {
+async function setupCamera(facing_mode) {
+  if (video_valid) {
+    stream.getTracks().forEach(function (track) {
+      track.stop();
+    });
+    //video.srcObject.stop();
+  }
+  video_valid = false;
   video = document.getElementById('video');
 
-  const stream = await navigator.mediaDevices.getUserMedia({
+
+
+  if (!isMobile()) {
+    facing_mode = "user";
+  }
+
+  stream = await navigator.mediaDevices.getUserMedia({
     'audio': false,
     'video': {
-      facingMode: 'user',
+      facingMode: facing_mode,
       width: mobile ? undefined : VIDEO_SIZE,
       height: mobile ? undefined : VIDEO_SIZE
     },
   });
   video.srcObject = stream;
-
+  video.play();
   return new Promise((resolve) => {
     video.onloadedmetadata = () => {
+      video_valid = true;
       resolve(video);
     };
   });
@@ -145,76 +159,131 @@ async function takePic() {
     var prediction = predictions[0]
     const keypoints = prediction.scaledMesh;
 
-    console.log(UV_COORDS)
 
     for (let i = 0; i < keypoints.length; i++) {
       const x = keypoints[i][0];
       const y = keypoints[i][1];
       const z = keypoints[i][2];
-      console.log(x, y, z)
-      console.log(videoWidth, videoHeight)
       myUVCoords[i] = [x / videoWidth, y / videoHeight]
     }
 
     updateUVs()
 
   }
+
+  setupCamera("environment");
+
+  output_canvas.requestFullscreen().then(res => {
+    screen.orientation.lock('landscape');
+    output_canvas.width = window.innerWidth;
+    output_canvas.height = window.innerHeight;
+  }).catch(err => {
+    alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+  });
+
 }
 
 
 async function renderPrediction() {
-  const predictions = await model.estimateFaces(video);
+  if (video_valid) {
+    const predictions = await model.estimateFaces(video);
 
 
-  if (predictions.length > 0) {
-    predictions.forEach((prediction, i) => {
-      var geom = faces[i].geometry
-      const keypoints = prediction.scaledMesh;
+    if (predictions.length > 0) {
+      predictions.forEach((prediction, i) => {
+        faces[i].visible = true;
+        var geom = faces[i].geometry
+        const keypoints = prediction.scaledMesh;
 
-      for (let i = 0; i < keypoints.length; i++) {
-        const x = keypoints[i][0];
-        const y = keypoints[i][1];
-        const z = keypoints[i][2];
-        var vert = geom.vertices[i]
-        vert.x = x - videoWidth / 2;
-        vert.y = -y + videoHeight / 2;
-        vert.z = 1;
-        geom.verticesNeedUpdate = true;
-      }
+        for (let i = 0; i < keypoints.length; i++) {
+          const x = keypoints[i][0];
+          const y = keypoints[i][1];
+          const z = keypoints[i][2];
+          var vert = geom.vertices[i]
+          vert.x = x - videoWidth / 2;
+          vert.y = -y + videoHeight / 2;
+          vert.z = 1;
+          geom.verticesNeedUpdate = true;
+        }
 
 
-    });
+      });
+    }
+    // TODO: Will, uncomment this.
+    for (var i = predictions.length; i < N_FACES; i++) {
+      faces[i].visible = false;
+    }
+
+    renderer.render(scene, camera);
+    var output_canvas = document.getElementById('output');
+    var output_context = output_canvas.getContext('2d');
+    var window_ratio = window.innerWidth / window.innerHeight / 2;
+    if ((videoWidth / videoHeight) > window_ratio) {
+      var y = videoHeight;
+      var y_offset = 0;
+      var x = y * window_ratio;
+      var x_offset = (videoWidth - x) / 2;
+    }
+    else {
+      var x = videoWidth
+      var y = x / window_ratio;
+      var x_offset = 0;
+      var y_offset = (videoHeight - y) / 2;
+    }
+    output_context.drawImage(renderer_canvas, x_offset, y_offset, x, y,
+      0, 0, window.innerWidth / 2, window.innerHeight);
+    output_context.drawImage(renderer_canvas, x_offset, y_offset, x, y,  // source
+      window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight); // target
+    console.log("out", output_canvas.width, output_canvas.height)
+    console.log("renderer", renderer_canvas.width, renderer_canvas.height)
+    console.log("window", window.innerWidth, window.innerHeight)
+
+  }
+  else {
+    console.log("Video invalid");
   }
 
   requestAnimationFrame(renderPrediction);
-  renderer.render(scene, camera);
-
 };
 
 async function main() {
+  video_valid = false;
   await tf.setBackend(state.backend);
 
-  var capture_button = document.getElementById("take_pic")
-  capture_button.onclick = takePic
+
+  document.body.addEventListener('click', takePic, true);
 
   myUVCoords = UV_COORDS.map(arr => { return arr.slice() })
 
-  await setupCamera();
+  var locOrientation = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation || screen.orientation.lock;
+  if (locOrientation) {
+    locOrientation('landscape').then(
+      (success) => console.log(success)
+      , (failure) => console.log(failure)
+    );
+  }
+  await setupCamera("user");
   video.play();
+
+
+
+
   videoWidth = video.videoWidth;
   videoHeight = video.videoHeight;
   video.width = videoWidth;
   video.height = videoHeight;
 
-
-  canvas = document.getElementById('output');
-  canvas.width = videoWidth;
-  canvas.height = videoHeight;
-  const canvasContainer = document.querySelector('.canvas-wrapper');
-  canvasContainer.style = `width: ${videoWidth}px; height: ${videoHeight}px`;
+  output_canvas = document.getElementById('output');
+  output_canvas.width = window.innerWidth;
+  output_canvas.height = window.innerHeight;
 
 
-  renderer = new THREE.WebGLRenderer({ canvas: canvas });
+  renderer_canvas = document.createElement("canvas");
+  renderer_canvas.width = videoWidth
+  renderer_canvas.height = videoHeight
+
+
+  renderer = new THREE.WebGLRenderer({ canvas: renderer_canvas });
 
 
   scene = new THREE.Scene();
@@ -228,7 +297,8 @@ async function main() {
 
   scene.add(imageObject);
   scene.add(camera)
-  camera.position.z = 500;
+  camera.position.z = 260;
+
 
   initFaceMeshes()
   model = await facemesh.load({ maxFaces: state.maxFaces });
