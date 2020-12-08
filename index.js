@@ -173,13 +173,6 @@ async function takePic() {
 
   setupCamera("environment");
 
-  output_canvas.requestFullscreen().then(res => {
-    screen.orientation.lock('landscape');
-    output_canvas.width = window.innerWidth;
-    output_canvas.height = window.innerHeight;
-  }).catch(err => {
-    alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-  });
 
 }
 
@@ -217,7 +210,7 @@ async function renderPrediction() {
     renderer.render(scene, camera);
     var output_canvas = document.getElementById('output');
     var output_context = output_canvas.getContext('2d');
-    var window_ratio = window.innerWidth / window.innerHeight / 2;
+    var window_ratio = window.innerWidth / window.innerHeight;
     if ((videoWidth / videoHeight) > window_ratio) {
       var y = videoHeight;
       var y_offset = 0;
@@ -231,9 +224,7 @@ async function renderPrediction() {
       var y_offset = (videoHeight - y) / 2;
     }
     output_context.drawImage(renderer_canvas, x_offset, y_offset, x, y,
-      0, 0, window.innerWidth / 2, window.innerHeight);
-    output_context.drawImage(renderer_canvas, x_offset, y_offset, x, y,  // source
-      window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight); // target
+      0, 0, window.innerWidth, window.innerHeight);
     console.log("out", output_canvas.width, output_canvas.height)
     console.log("renderer", renderer_canvas.width, renderer_canvas.height)
     console.log("window", window.innerWidth, window.innerHeight)
@@ -297,7 +288,7 @@ async function main() {
 
   scene.add(imageObject);
   scene.add(camera)
-  camera.position.z = 260;
+  camera.position.z = 350;
 
 
   initFaceMeshes()
