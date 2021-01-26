@@ -35,7 +35,7 @@ function isMobile() {
 
 let model, videoWidth, videoHeight, video, scene, camera, renderer, faces, myUVCoords, renderer_canvas, output_canvas, video_valid, stream, particleSystem, t0;
 let N_KEYPOINTS = 468;
-const N_FACES = 3;
+const N_FACES = 20;
 
 const VIDEO_SIZE = 500;
 const mobile = isMobile();
@@ -274,12 +274,19 @@ async function main() {
 
   myUVCoords = UV_COORDS.map(arr => { return arr.slice() })
 
-  var locOrientation = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation || screen.orientation.lock;
-  if (locOrientation) {
-    locOrientation('landscape').then(
-      (success) => console.log(success)
-      , (failure) => console.log(failure)
-    );
+  try {
+    var locOrientation = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation || screen.orientation.lock;
+    if (locOrientation) {
+      locOrientation('landscape').then(
+        (success) => console.log(success)
+        , (failure) => console.log(failure)
+      );
+    }
+  }
+  catch (err) {
+  }
+  finally {
+
   }
   await setupCamera("user");
   video.play();
