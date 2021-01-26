@@ -35,7 +35,7 @@ function isMobile() {
 
 let model, videoWidth, videoHeight, video, scene, camera, renderer, faces, myUVCoords, renderer_canvas, output_canvas, video_valid, stream, particleSystem, t0;
 let N_KEYPOINTS = 468;
-const N_FACES = 20;
+const N_FACES = 3;
 
 const VIDEO_SIZE = 500;
 const mobile = isMobile();
