@@ -14,6 +14,7 @@
     "@tensorflow/tfjs-backend-webgl": "^2.1.0",
     "@tensorflow/tfjs-converter": "^2.1.0",
     "@tensorflow/tfjs-core": "^2.1.0",
+    "particles.js": "^2.0.0",
     "stats.js": "^0.17.0"
   },
   "scripts": {

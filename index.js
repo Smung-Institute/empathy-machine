@@ -33,7 +33,7 @@ function isMobile() {
   return isAndroid || isiOS;
 }
 
-let model, videoWidth, videoHeight, video, scene, camera, renderer, faces, myUVCoords, renderer_canvas, output_canvas, video_valid, stream;
+let model, videoWidth, videoHeight, video, scene, camera, renderer, faces, myUVCoords, renderer_canvas, output_canvas, video_valid, stream, particleSystem, t0;
 let N_KEYPOINTS = 468;
 const N_FACES = 3;
 
@@ -181,12 +181,101 @@ async function renderPrediction() {
   if (video_valid) {
     const predictions = await model.estimateFaces(video);
 
+    document.getElementById("splash").style.display = "none";
+    document.getElementById("loading").style.display = "none";
 
     if (predictions.length > 0) {
       predictions.forEach((prediction, i) => {
         faces[i].visible = true;
         var geom = faces[i].geometry
         const keypoints = prediction.scaledMesh;
+
+        var ann = prediction.annotations
+        var upper_lip = new THREE.Vector3(...ann.lipsUpperInner[6])
+        var lower_lip = new THREE.Vector3(...ann.lipsLowerInner[6])
+        var left_corner = new THREE.Vector3(...ann.lipsUpperInner[0])
+        var right_corner = new THREE.Vector3(...ann.lipsUpperInner[10])
+        var right_cheek = new THREE.Vector3(...ann.rightCheek[0])
+        var left_cheek = new THREE.Vector3(...ann.leftCheek[0])
+        var between_eyes = new THREE.Vector3(...ann.midwayBetweenEyes[0])
+        ///particleSystem.position.copy(left_cheek);
+
+        var fountain_pos = between_eyes
+        console.log(ann)
+
+        particleSystem.position.setX(fountain_pos.x - videoWidth / 2);
+        particleSystem.position.setY(-fountain_pos.y + videoHeight / 2);
+        particleSystem.position.setZ(fountain_pos.z + 100);
+
+        var corner_to_corner_line = right_corner.clone().sub(left_corner).projectOnPlane(new THREE.Vector3(0, 0, 1))
+
+        var corner_to_lower_line = lower_lip.clone().sub(left_corner).projectOnPlane(new THREE.Vector3(0, 0, 1))
+
+        //var jaw_to_jaw_line = left_jaw.sub(right_jaw)
+        var cheek_to_cheek_line = left_cheek.clone().sub(right_cheek);
+
+        var side = cheek_to_cheek_line.clone().normalize();
+        var forward = side.clone().cross(between_eyes.clone().sub(left_cheek)).normalize();
+        var up = side.clone().cross(forward).normalize();
+        var m = new THREE.Matrix4();
+        m.set(
+          side.x, side.y, side.z, 0,
+          up.x, up.y, up.z, 0,
+          forward.x, forward.y, forward.z, 0,
+          0, 0, 0, 1
+        )
+
+        var seconds = new Date().getTime() / 1000;
+        particleSystem.setRotationFromMatrix(m)
+        //particleSystem.rotateOnAxis(up, seconds)
+        var positions = particleSystem.geometry.getAttribute("position");
+        var velocities = particleSystem.geometry.getAttribute("velocity");
+
+        positions.needsUpdate = true;
+
+        velocities.array = velocities.array.map(
+          (v, i) => {
+            if (i % 3 == 1) {
+              return v - 1
+            } else {
+              return v
+            }
+          }
+        )
+
+        var reset = [];
+        positions.array = positions.array.map(
+          (p, i) => {
+            if (i % 3 == 1) {
+              if (p < -300) {
+                reset.push(i);
+              }
+            }
+
+            return p + velocities.array[i]
+          }
+        )
+
+        var phi = 1.62;
+        var smile_index = 8.31446261815324 * (corner_to_corner_line.length() / cheek_to_cheek_line.length()) + (corner_to_corner_line.angleTo(corner_to_lower_line))
+        console.log(corner_to_corner_line.length() / cheek_to_cheek_line.length())
+        console.log(corner_to_corner_line.angleTo(corner_to_lower_line))
+        var smile_factor = phi * phi * phi * smile_index * smile_index * smile_index * smile_index / (8.31446261815324 * 8.31446261815324 * 8.31446261815324 * 8.31446261815324)
+        console.log(smile_factor)
+
+        reset.forEach(i => {
+          positions.array[i - 1] = 0
+          positions.array[i] = 0
+          positions.array[i + 1] = 0
+          velocities.array[i - 1] = smile_factor * (Math.random() * 10 - 5)
+          velocities.array[i] = smile_factor * (Math.random() * 10 - 5)
+          velocities.array[i + 1] = smile_factor * (Math.random() * 20 + 10)
+        })
+        /*particleSystem.geometry.vertices.forEach(
+          vertex => {
+            vertex.setX(vertex.x + Math.random() * 0.1);
+          }
+        ); */
 
         for (let i = 0; i < keypoints.length; i++) {
           const x = keypoints[i][0];
@@ -225,9 +314,6 @@ async function renderPrediction() {
     }
     output_context.drawImage(renderer_canvas, x_offset, y_offset, x, y,
       0, 0, window.innerWidth, window.innerHeight);
-    console.log("out", output_canvas.width, output_canvas.height)
-    console.log("renderer", renderer_canvas.width, renderer_canvas.height)
-    console.log("window", window.innerWidth, window.innerHeight)
 
   }
   else {
@@ -289,6 +375,68 @@ async function main() {
   scene.add(imageObject);
   scene.add(camera)
   camera.position.z = 350;
+
+  // create the particle variables
+  var particleCount = 500,
+    particles = new THREE.Geometry(),
+    pMaterial = new THREE.PointsMaterial({
+      color: 0xFFFFFF,
+      size: 3
+    });
+
+  // now create the individual particles
+  var particles = []
+  var particle_velocities = []
+  for (var p = 0; p < particleCount; p++) {
+
+    // create a particle with random
+    // position values, -250 -> 250
+    var pX = 0,
+      pY = 0,
+      pZ = 0,
+      particle = new THREE.Vector3(pX, pY, pZ),
+      vX = Math.random() * 10 - 5,
+      vY = Math.random() * 10 - 5,
+      vZ = Math.random() * 20 + 5,
+      particle_velocity = new THREE.Vector3(vX, vY, vZ);
+
+    // add it to the geometry
+    particles.push(particle);
+    particle_velocities.push(particle_velocity);
+  }
+  //var particles = new THREE.BufferGeometry().fromGeometry(particles);
+
+  //const vertices = new THREE.BoxGeometry(20, 20, 20, 16, 16, 16).vertices;
+
+  const positions = new Float32Array(particles.length * 3);
+  const velocities = new Float32Array(particle_velocities.length * 3);
+
+  let vertex;
+  let vertex_velocity;
+
+  for (let i = 0, l = particles.length; i < l; i++) {
+
+    vertex = particles[i];
+    vertex.toArray(positions, i * 3);
+
+    vertex_velocity = particle_velocities[i];
+    vertex_velocity.toArray(velocities, i * 3);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.addAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.addAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+
+
+  // create the particle system
+  particleSystem = new THREE.Points(
+    geometry,
+    pMaterial);
+
+  // add it to the scene
+  scene.add(particleSystem);
+
+
 
 
   initFaceMeshes()
