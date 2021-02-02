@@ -16,9 +16,6 @@ limitations under the License.
 <head>
   <!-- Load three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.106.2/build/three.min.js"></script>
-  <!-- Load scatter-gl.js -->
-  <script src="particles.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/scatter-gl@0.0.1/lib/scatter-gl.min.js"></script>
   <!-- Global site tag (gtag.js) - Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-TZZ4Q54HWF"></script>
   <script>
@@ -227,10 +224,12 @@ limitations under the License.
       margin: 0;
       padding: 0;
       background-color: #67C0A2;
+      overflow: hidden;
     }
 
     body {
       overflow: hidden;
+      height: 100%;
       /* Hide scrollbars */
     }
   </style>
@@ -242,9 +241,8 @@ limitations under the License.
       <div class="canvas-wrapper">
         <canvas id="output"></canvas>
         <video id="video" playsinline style="
-            -webkit-transform: scaleX(-1);
-            transform: scaleX(-1);
-            visibility: hidden;
+            -webkit-transform: scale(0.0001,0.0001);
+            transform: scale(0.0001,0.0001);
             width: auto;
             height: auto;
             ">
@@ -256,6 +254,5 @@ limitations under the License.
     </div>
   </div>
 </body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.6/dat.gui.min.js"></script>
 
 <script src="index.js"></script>

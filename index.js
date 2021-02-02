@@ -73,7 +73,7 @@ async function setupCamera(facing_mode) {
   video.srcObject = stream;
   video.play();
   return new Promise((resolve) => {
-    video.onloadedmetadata = () => {
+    video.onloadeddata = () => {
       video_valid = true;
       resolve(video);
     };
