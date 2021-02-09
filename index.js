@@ -33,7 +33,7 @@ function isMobile() {
   return isAndroid || isiOS;
 }
 
-let model, videoWidth, videoHeight, video, scene, camera, renderer, faces, myUVCoords, renderer_canvas, output_canvas, video_valid, stream, particleSystem, t0;
+let model, videoWidth, videoHeight, video, scene, camera, renderer, faces, myUVCoords, renderer_canvas, output_canvas, video_valid, stream, facing;
 let N_KEYPOINTS = 468;
 const N_FACES = 3;
 
@@ -45,8 +45,21 @@ const state = {
   triangulateMesh: true
 };
 
+function toggleCamera() {
+  console.log(facing)
+  if (facing == "user") {
+    return setupCamera("environment")
+  }
+
+  if (facing == "environment") {
+    return setupCamera("user")
+  }
+}
+
 
 async function setupCamera(facing_mode) {
+
+  console.log(facing)
   if (video_valid) {
     stream.getTracks().forEach(function (track) {
       track.stop();
@@ -56,12 +69,15 @@ async function setupCamera(facing_mode) {
   video_valid = false;
   video = document.getElementById('video');
 
-
+  console.log(isMobile())
 
   if (!isMobile()) {
     facing_mode = "user";
   }
 
+  facing = facing_mode;
+
+  console.log(facing)
   stream = await navigator.mediaDevices.getUserMedia({
     'audio': false,
     'video': {
@@ -171,7 +187,8 @@ async function takePic() {
 
   }
 
-  setupCamera("environment");
+  toggleCamera();
+  //setupCamera("environment");
 
 
 }
